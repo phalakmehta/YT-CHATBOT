@@ -1,8 +1,15 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from dotenv import load_dotenv
 
-os.environ["GROQ_API_KEY"] = "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"
+# This looks for the .env file and loads the variables
+load_dotenv()
+
+# Now you can access it safely
+groq_key = os.getenv("GROQ_API_KEY")
+
+
 
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled
