@@ -4,6 +4,8 @@
   "version": "1.0",
   "description": "Chat with any YouTube video using RAG",
   "permissions": ["activeTab"],
+  "host_permissions": [
+  "http://127.0.0.1:5000/*"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
