@@ -2,32 +2,37 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-from dotenv import load_dotenv
+# ── API Keys (set these as environment variables on Render) ──
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "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")
+HF_API_KEY   = os.environ.get("HF_API_KEY", "")   # get free key at huggingface.co/settings/tokens
 
-# This looks for the .env file and loads the variables
-load_dotenv()
-
-# Now you can access it safely
-groq_key = os.getenv("GROQ_API_KEY")
+os.environ["GROQ_API_KEY"] = GROQ_API_KEY
 
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_groq import ChatGroq
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough, RunnableLambda
 from langchain_core.output_parsers import StrOutputParser
 
+# ── HuggingFace Inference API embeddings (no local download, free) ──
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
+
 app = Flask(__name__)
 CORS(app)
 
-# ── shared state ────────────────────────────────────────────────
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-
+# ── LLM (same as notebook) ───────────────────────────────────────
 llm = ChatGroq(model="openai/gpt-oss-120b", temperature=0.2)
 
+# ── Embeddings via HF Inference API (replaces local model) ───────
+embeddings = HuggingFaceInferenceAPIEmbeddings(
+    api_key=HF_API_KEY,
+    model_name="sentence-transformers/all-MiniLM-L6-v2"  # same model, just via API
+)
+
+# ── Prompt (same as notebook) ────────────────────────────────────
 prompt = PromptTemplate(
     template="""
       You are a helpful assistant.
@@ -43,7 +48,7 @@ prompt = PromptTemplate(
 # video_id -> chain
 chains = {}
 
-# ── helpers ─────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────
 def extract_video_id(url: str) -> str:
     import re
     patterns = [
@@ -56,14 +61,13 @@ def extract_video_id(url: str) -> str:
         m = re.search(p, url)
         if m:
             return m.group(1)
-    # treat raw 11-char string as ID
     if re.match(r"^[A-Za-z0-9_-]{11}$", url):
         return url
     raise ValueError("Could not extract video ID from URL")
 
 
 def build_chain(video_id: str):
-    # ── STEP 1: INDEXING (same as notebook) ──
+    # STEP 1: INDEXING (same as notebook)
     ytt_api = YouTubeTranscriptApi()
     transcript_list = ytt_api.fetch(video_id, languages=["en"])
     transcript = " ".join(chunk.text for chunk in transcript_list)
@@ -73,10 +77,10 @@ def build_chain(video_id: str):
 
     vector_store = FAISS.from_documents(chunks, embeddings)
 
-    # ── STEP 2: RETRIEVAL ──
+    # STEP 2: RETRIEVAL
     retriever = vector_store.as_retriever(search_type="similarity", search_kwargs={"k": 4})
 
-    # ── STEP 3 & 4: AUGMENTATION + GENERATION (chain) ──
+    # STEP 3 & 4: AUGMENTATION + GENERATION
     def format_docs(retrieved_docs):
         return "\n\n".join(doc.page_content for doc in retrieved_docs)
 
@@ -85,12 +89,16 @@ def build_chain(video_id: str):
         "question": RunnablePassthrough(),
     })
 
-    parser = StrOutputParser()
-    main_chain = parallel_chain | prompt | llm | parser
-    return main_chain, transcript[:200]  # return preview too
+    main_chain = parallel_chain | prompt | llm | StrOutputParser()
+    return main_chain
 
 
-# ── routes ───────────────────────────────────────────────────────
+# ── Routes ───────────────────────────────────────────────────────
+@app.route("/", methods=["GET"])
+def index():
+    return jsonify({"status": "YT Chatbot API is running"})
+
+
 @app.route("/load", methods=["POST"])
 def load_video():
     data = request.get_json()
@@ -100,8 +108,7 @@ def load_video():
     try:
         video_id = extract_video_id(url)
         if video_id not in chains:
-            chain, preview = build_chain(video_id)
-            chains[video_id] = chain
+            chains[video_id] = build_chain(video_id)
         return jsonify({"video_id": video_id, "status": "ready"})
     except TranscriptsDisabled:
         return jsonify({"error": "No captions available for this video."}), 400
@@ -126,4 +133,5 @@ def chat():
 
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=False)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)

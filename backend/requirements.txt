@@ -1,3 +1,6 @@
+
+sentence-transformers
+python-dotenv
 flask
 flask-cors
 groq
@@ -8,5 +11,4 @@ langchain-community
 langchain-text-splitters
 langchain-core
 faiss-cpu
-sentence-transformers
-python-dotenv
+huggingface-hub
