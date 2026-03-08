@@ -2,7 +2,8 @@
 
 *RAG-Powered YouTube Chrome Extension*
 
-![](media/9036d2fa379c6cc38125912a4f2666e5f059ac68.png){width="5.416666666666667in" height="3.2291666666666665in"}
+<img width="1656" height="856" alt="image" src="https://github.com/user-attachments/assets/a2caaee0-5e1a-4447-b1f3-b681771c4a35" />
+
 
 *Extension in action --- chatting with a 3Blue1Brown neural network video*
 
